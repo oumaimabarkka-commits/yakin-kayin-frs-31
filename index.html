@@ -1,27 +1,38 @@
 <!DOCTYPE html>
 <html>
+
 <head>
+
 <meta charset="utf-8"/>
+
 <title>Carte Fournisseurs Île-de-France</title>
+
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
 <style>
 
-#map{ height:600px; }
+#map{
+height:600px;
+}
 
 .filters{
+
 margin-bottom:15px;
 background:#f4f4f4;
 padding:10px;
 border-radius:5px;
+
 }
 
-input, select{
+input,select{
+
 margin-right:10px;
 padding:5px;
+
 }
 
 .header{
+
 display:flex;
 align-items:center;
 gap:15px;
@@ -29,19 +40,25 @@ background:#f8f8f8;
 padding:10px;
 border-radius:8px;
 margin-bottom:10px;
+
 }
 
 .legend{
+
 background:white;
 padding:10px;
 border-radius:8px;
 box-shadow:0 0 5px rgba(0,0,0,0.3);
-line-height:25px;
+line-height:23px;
+
 }
 
-.legend span:hover{
-background:#eee;
-cursor:pointer;
+#resultats{
+
+font-weight:bold;
+margin-left:15px;
+color:#2c3e50;
+
 }
 
 </style>
@@ -54,30 +71,36 @@ cursor:pointer;
 
 <img src="logo.png" width="100">
 
-<h2>
-Carte Fournisseurs Île-de-France
-</h2>
+<h2>Carte Fournisseurs Île-de-France</h2>
+
+<span id="resultats">
+0 fournisseurs
+</span>
 
 </div>
 
 <div class="filters">
 
 Fournisseur :
+
 <select id="filtreNom">
 <option value="">Tous</option>
 </select>
 
 Ville :
+
 <select id="filtreVille">
 <option value="">Toutes</option>
 </select>
 
 CP :
+
 <select id="filtreCP">
 <option value="">Tous</option>
 </select>
 
 Produit :
+
 <select id="filtreProduit">
 <option value="">Tous</option>
 </select>
@@ -115,96 +138,94 @@ Reset
 
 <script>
 
-// Carte
+// MAP
 
-var ileDeFranceBounds=[[48.0,1.5],[49.2,3.5]];
-
-var map=L.map('map',{
-
-maxBounds: ileDeFranceBounds,
-maxBoundsViscosity:1
-
-}).setView([48.85,2.35],10);
+var map=L.map('map').setView([48.85,2.35],10);
 
 L.tileLayer(
 
 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
 
-{ attribution:'© OpenStreetMap' }
-
-).addTo(map);
-
-L.rectangle(
-
-ileDeFranceBounds,
-
-{ color:"red", weight:4, fill:false }
+{ attribution:'© OpenStreetMap'}
 
 ).addTo(map);
 
 var markers=[];
 
-var distance=0;
-
 var circle=null;
 
-var fournisseursSet = new Set();
-var villesSet = new Set();
-var cpsSet = new Set();
-var produitsSet = new Set();
+var fournisseursSet=new Set();
+var villesSet=new Set();
+var cpsSet=new Set();
+var produitsSet=new Set();
 
-// slider distance
+// DISTANCE SLIDER
 
 document
 .getElementById("filtreDistance")
 .addEventListener("input",function(){
 
-distance=this.value;
-
 document.getElementById(
 "distanceValue"
-).textContent=distance+" km";
+).textContent=this.value+" km";
+
+filtrer();
 
 });
 
-// calcul distance
+// NORMALIZE
+
+function normalize(str){
+
+return str ?
+
+str.normalize("NFD")
+
+.replace(/[\u0300-\u036f]/g,"")
+
+.trim()
+
+.toLowerCase()
+
+: "";
+
+}
+
+// DISTANCE KM
 
 function distanceKm(lat1,lon1,lat2,lon2){
 
 var R=6371;
 
-var dLat=
-(lat2-lat1)*Math.PI/180;
+var dLat=(lat2-lat1)*Math.PI/180;
 
-var dLon=
-(lon2-lon1)*Math.PI/180;
+var dLon=(lon2-lon1)*Math.PI/180;
 
 var a=
 
-Math.sin(dLat/2)*Math.sin(dLat/2)
-
-+
+Math.sin(dLat/2)**2+
 
 Math.cos(lat1*Math.PI/180)
+
 *
+
 Math.cos(lat2*Math.PI/180)
 
 *
-Math.sin(dLon/2)
-*
-Math.sin(dLon/2);
 
-var c=
-2*Math.atan2(
+Math.sin(dLon/2)**2;
+
+return 2*R*Math.atan2(
+
 Math.sqrt(a),
-Math.sqrt(1-a)
-);
 
-return R*c;
+Math.sqrt(1-a)
+
+);
 
 }
 
-// Icônes
+// ICONS
 
 function getIcon(color){
 
@@ -224,7 +245,9 @@ iconAnchor:[12,41]
 
 }
 
-// Fournisseurs
+var defaultIcon=getIcon("grey");
+
+// COULEURS FOURNISSEURS
 
 var fournisseurIcons={
 
@@ -255,31 +278,14 @@ var fournisseurIcons={
 "IDF MARQUAGE":getIcon("grey"),
 "EUROPIERRE":getIcon("blue"),
 "RFM":getIcon("red"),
-"ATPL CASELAS":getIcon("green")
+"ATPL CASELAS":getIcon("green"),
+"Resimark":getIcon("orange"),
+"Forum-Environnement":getIcon("violet"),
+"EUROPEENNE NEGO":getIcon("yellow")
 
 };
 
-var defaultIcon=getIcon("grey");
-
-// Normalisation
-
-function normalize(str){
-
-return str ?
-
-str.normalize("NFD")
-
-.replace(/[\u0300-\u036f]/g,"")
-
-.trim()
-
-.toLowerCase()
-
-: "";
-
-}
-
-// Charger CSV
+// LOAD CSV
 
 fetch("./data.csv")
 
@@ -297,88 +303,44 @@ complete:function(results){
 
 results.data.forEach(row=>{
 
-var cleanRow={};
+var lat=parseFloat(row.latitude?.replace(",",".")); 
+var lng=parseFloat(row.longitude?.replace(",","."));
 
-for(let key in row){
+if(isNaN(lat)) return;
 
-cleanRow[
-normalize(key)
-]=row[key];
+var fournisseur=row.fournisseur?.trim();
+var ville=row.ville?.trim();
+var cp=row.cp?.trim();
+var produit=row.produit?.trim();
 
-}
+if(fournisseur) fournisseursSet.add(fournisseur);
+if(ville) villesSet.add(ville);
+if(cp) cpsSet.add(cp);
+if(produit) produitsSet.add(produit);
 
-row=cleanRow;
+var icon=fournisseurIcons[fournisseur]||defaultIcon;
 
-var lat=parseFloat(
+var marker=L.marker(
 
-row["latitude"]
-?.replace(",", ".")
+[lat,lng],
 
-);
+{icon:icon}
 
-var lng=parseFloat(
-
-row["longitude"]
-?.replace(",", ".")
-
-);
-
-if(isNaN(lat)||isNaN(lng))
-return;
-
-var fournisseur=row["fournisseur"]?.trim();
-
-var ville=row["ville"]?.trim();
-
-var cp=row["cp"]?.trim();
-
-var produit=row["produit"]?.trim();
-
-if(fournisseur)
-fournisseursSet.add(fournisseur);
-
-if(ville)
-villesSet.add(ville);
-
-if(cp)
-cpsSet.add(cp);
-
-if(produit)
-produitsSet.add(produit);
-
-var popup=
-
-`<b>Fournisseur :</b> ${fournisseur||""}<br>
-
-<b>Agence :</b> ${row["nom de l'agence"]||""}<br>
-
-<b>Adresse :</b> ${row["adresse complete"]||""}<br>
-
-<b>CP :</b> ${cp||""}<br>
-
-<b>Ville :</b> ${ville||""}<br>
-
-<b>Pays :</b> ${row["pays"]||""}<br>
-
-<b>Email :</b> ${row["email"]||""}<br>
-
-<b>Produit :</b> ${produit||""}`;
-
-var iconChoisie=
-
-fournisseurIcons[fournisseur]
-
-|| defaultIcon;
-
-var marker=
-
-L.marker([lat,lng],
-
-{icon:iconChoisie})
+)
 
 .addTo(map)
 
-.bindPopup(popup);
+.bindPopup(
+
+"<b>"+fournisseur+"</b><br>"+
+
+ville+"<br>"+
+
+cp+"<br>"+
+
+produit
+
+);
 
 marker.data=row;
 
@@ -386,10 +348,12 @@ markers.push(marker);
 
 });
 
-remplirSelect("filtreNom", fournisseursSet);
-remplirSelect("filtreVille", villesSet);
-remplirSelect("filtreCP", cpsSet);
-remplirSelect("filtreProduit", produitsSet);
+remplirSelect("filtreNom",fournisseursSet);
+remplirSelect("filtreVille",villesSet);
+remplirSelect("filtreCP",cpsSet);
+remplirSelect("filtreProduit",produitsSet);
+
+filtrer();
 
 }
 
@@ -397,19 +361,19 @@ remplirSelect("filtreProduit", produitsSet);
 
 });
 
-// remplir select
+// REMPLIR SELECT
 
 function remplirSelect(id,set){
 
-var select=
-document.getElementById(id);
+var select=document.getElementById(id);
 
 Array.from(set)
+
 .sort()
+
 .forEach(v=>{
 
-var opt=
-document.createElement("option");
+var opt=document.createElement("option");
 
 opt.value=v;
 
@@ -421,63 +385,38 @@ select.appendChild(opt);
 
 }
 
-// FILTRE
+// FILTRE GLOBAL
 
 function filtrer(){
 
-var nom =
-normalize(
-document.getElementById("filtreNom").value
-);
-
-var ville =
-normalize(
-document.getElementById("filtreVille").value
-);
-
-var cp =
-normalize(
-document.getElementById("filtreCP").value
-);
-
-var produit =
-normalize(
-document.getElementById("filtreProduit").value
-);
-
-var distance =
-document.getElementById(
-"filtreDistance"
-).value;
+var nom=normalize(filtreNom.value);
+var ville=normalize(filtreVille.value);
+var cp=normalize(filtreCP.value);
+var produit=normalize(filtreProduit.value);
+var distance=filtreDistance.value;
 
 var centre=null;
 
-// trouver centre
-
-markers.forEach(marker=>{
-
-var data=marker.data;
+for(let marker of markers){
 
 if(
 
 ville &&
 
-normalize(data["ville"])==ville
+normalize(marker.data.ville)==ville
 
 ){
 
 centre=marker.getLatLng();
 
+break;
+
 }
 
-});
-
-// supprimer cercle
+}
 
 if(circle)
 map.removeLayer(circle);
-
-// dessiner cercle
 
 if(centre && distance>0){
 
@@ -496,45 +435,39 @@ fill:false
 
 ).addTo(map);
 
+map.setView(centre,11);
+
 }
 
-// filtrage
+var compteur=0;
 
 markers.forEach(marker=>{
 
-var data = marker.data;
+var data=marker.data;
 
-var match = true;
+var match=true;
 
-if(nom &&
-!normalize(data["fournisseur"]).includes(nom))
+if(nom && !normalize(data.fournisseur).includes(nom))
 match=false;
 
-if(ville &&
-!normalize(data["ville"]).includes(ville))
+if(ville && !normalize(data.ville).includes(ville))
 match=false;
 
-if(cp &&
-!normalize(data["cp"]).includes(cp))
+if(cp && !normalize(data.cp).includes(cp))
 match=false;
 
-if(produit &&
-normalize(data["produit"])!=produit)
+if(produit && normalize(data.produit)!=produit)
 match=false;
 
 if(centre && distance>0){
 
-var pos=
-marker.getLatLng();
-
-var d=
-distanceKm(
+var d=distanceKm(
 
 centre.lat,
 centre.lng,
 
-pos.lat,
-pos.lng
+marker.getLatLng().lat,
+marker.getLatLng().lng
 
 );
 
@@ -543,16 +476,29 @@ match=false;
 
 }
 
-if(match)
-marker.addTo(map);
-else
-map.removeLayer(marker);
+if(match){
 
-});
+marker.addTo(map);
+
+compteur++;
 
 }
 
-// reset
+else{
+
+map.removeLayer(marker);
+
+}
+
+});
+
+document.getElementById("resultats").textContent=
+
+compteur+" fournisseurs trouvés";
+
+}
+
+// RESET
 
 function resetMap(){
 
@@ -560,47 +506,38 @@ location.reload();
 
 }
 
-// Légende (inchangé)
+// LEGENDE
 
-var legend =
-L.control({position:'bottomright'});
+var legend=L.control({position:'bottomright'});
 
 legend.onAdd=function(){
 
-var div =
-L.DomUtil.create('div','legend');
+var div=L.DomUtil.create('div','legend');
 
 var fournisseurs = [
+
 "🔵 Loxam","🔴 Point P","🟢 Raboni","🟠 Cemex","🟣 CAUPAMAT CADENZ",
 "🟡 Tersen","⚫ pum","⚪ YPREMA","🔵 Fransbonhomme","🔴 BSM",
-"🟢 SODEXTRA","🟠 COLBER","⚪ SOL 78",
+"🟢 SODEXTRA","🟠 COLBER","🟡 EUROPEENNE NEGO","⚪ SOL 78",
 "🔵 SPME","🟠 VIACOV","⚫ Bouvelot TP","🟣 CHEUTIN","🟢 GO POMPE",
 "🔵 SNB","🔴 EVA INDUSTRIES","🟢 EVO LOCATION","🟠 UTD",
 "🟣 SCIABBARRASI RENT","🟡 LM DISTRIBUTION","⚪ IDF MARQUAGE",
-"🔵 EUROPIERRE","🔴 RFM","🟢 ATPL CASELAS"
-  ];
+"🔵 EUROPIERRE","🔴 RFM","🟢 ATPL CASELAS","🟠 Resimark",
+"🟣 Forum-Environnement"
 
+];
 
-div.innerHTML =
-"<b>Fournisseurs</b><br>";
+div.innerHTML="<b>Fournisseurs</b><br>";
 
 fournisseurs.forEach(f=>{
 
-var span=
-document.createElement("span");
+var span=document.createElement("span");
 
 span.innerHTML=f+"<br>";
 
-span.style.cursor="pointer";
-
 span.onclick=()=>{
 
-var nomFournisseur=
-f.substring(2).trim();
-
-document.getElementById(
-"filtreNom"
-).value=nomFournisseur;
+filtreNom.value=f.substring(2);
 
 filtrer();
 
@@ -619,4 +556,5 @@ legend.addTo(map);
 </script>
 
 </body>
+
 </html>
